@@ -173,8 +173,8 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         wk1 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
         wk2 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
     else:
-        wk1 = fft.zeros(ndim, dtype="complex")
-        wk2 = fft.zeros(ndim, dtype="complex")
+        wk1 = numpy.zeros(ndim, dtype="complex")
+        wk2 = numpy.zeros(ndim, dtype="complex")
 
     fac = ndim / (xdif * ofac)
     fndim = ndim
