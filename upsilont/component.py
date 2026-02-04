@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 class _CnnNet(nn.Module):
     """Convolution neural network for UPSILoN-T."""
 
-    def __init__(self, n_final: int=21):
+    def __init__(self, n_final: int = 21):
         """
         Defines network structures.
 
@@ -71,7 +71,7 @@ class _CnnNet(nn.Module):
 class _Net(nn.Module):
     """Deep Neural Network for UPSILoN-T"""
 
-    def __init__(self, n_final: int=21):
+    def __init__(self, n_final: int = 21):
         """
         Defines network structures.
 
@@ -105,7 +105,7 @@ class _Net(nn.Module):
 class Net(nn.Module):
     """Deep Neural Network for UPSILoN-T"""
 
-    def __init__(self, n_final: int=21):
+    def __init__(self, n_final: int = 21):
         """
         Defines network structures.
 

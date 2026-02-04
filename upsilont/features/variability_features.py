@@ -27,10 +27,24 @@ def get_train_feature_name():
         A list of features' names.
     """
 
-    features = ['amplitude', 'hl_amp_ratio', 'kurtosis', 'period',
-                'phase_cusum', 'phase_eta', 'phi21', 'phi31', 'quartile31',
-                'r21', 'r31', 'shapiro_w', 'skewness', 'slope_per10',
-                'slope_per90', 'stetson_k']
+    features = [
+        "amplitude",
+        "hl_amp_ratio",
+        "kurtosis",
+        "period",
+        "phase_cusum",
+        "phase_eta",
+        "phi21",
+        "phi31",
+        "quartile31",
+        "r21",
+        "r31",
+        "shapiro_w",
+        "skewness",
+        "slope_per10",
+        "slope_per90",
+        "stetson_k",
+    ]
     features.sort()
 
     return features
@@ -51,14 +65,14 @@ def get_all_feature_name():
 
     features = get_train_feature_name()
 
-    features.append('cusum')
-    features.append('eta')
-    features.append('n_points')
-    features.append('period_SNR')
-    features.append('period_log10FAP')
-    features.append('period_uncertainty')
-    features.append('weighted_mean')
-    features.append('weighted_std')
+    features.append("cusum")
+    features.append("eta")
+    features.append("n_points")
+    features.append("period_SNR")
+    features.append("period_log10FAP")
+    features.append("period_uncertainty")
+    features.append("weighted_mean")
+    features.append("weighted_std")
 
     features.sort()
 
@@ -133,16 +147,17 @@ class VariabilityFeatures:
             self.err = np.ones(len(self.mag)) * np.std(self.mag)
 
         # Check length.
-        if (len(self.date) != len(self.mag)) or \
-           (len(self.date) != len(self.err)) or \
-           (len(self.mag) != len(self.err)):
-            raise RuntimeError('The length of date, mag, and err must be same.')
+        if (
+            (len(self.date) != len(self.mag))
+            or (len(self.date) != len(self.err))
+            or (len(self.mag) != len(self.err))
+        ):
+            raise RuntimeError("The length of date, mag, and err must be same.")
 
         # if the number of data points is too small.
         min_n_data = 80
         if len(self.date) < min_n_data:
-            warnings.warn('The number of data points are less than %d.'
-                          % min_n_data)
+            warnings.warn("The number of data points are less than %d." % min_n_data)
 
         n_threads = int(n_threads)
         if n_threads > multiprocessing.cpu_count():
@@ -183,7 +198,7 @@ class VariabilityFeatures:
         elif not self.err.all():
             np.putmask(self.err, self.err == 0, np.median(self.err))
 
-        self.weight = 1. / self.err
+        self.weight = 1.0 / self.err
         self.weighted_sum = np.sum(self.weight)
 
         # Simple statistics, mean, median and std.
@@ -193,8 +208,10 @@ class VariabilityFeatures:
 
         # Weighted mean and std.
         self.weighted_mean = np.sum(self.mag * self.weight) / self.weighted_sum
-        self.weighted_std = np.sqrt(np.sum((self.mag - self.weighted_mean) ** 2
-                                           * self.weight) / self.weighted_sum)
+        self.weighted_std = np.sqrt(
+            np.sum((self.mag - self.weighted_mean) ** 2 * self.weight)
+            / self.weighted_sum
+        )
 
         # Skewness and kurtosis.
         self.skewness = ss.skew(self.mag)
@@ -205,15 +222,15 @@ class VariabilityFeatures:
         self.shapiro_w = shapiro[0]
 
         # Percentile features.
-        self.quartile31 = np.percentile(self.mag, 75) - \
-                          np.percentile(self.mag, 25)
+        self.quartile31 = np.percentile(self.mag, 75) - np.percentile(self.mag, 25)
 
         # Stetson K.
         self.stetson_k = self.get_stetson_k(self.mag, self.median, self.err)
 
         # Ratio between higher and lower amplitude than average.
         self.hl_amp_ratio = self.half_mag_amplitude_ratio(
-            self.mag, self.median, self.weight)
+            self.mag, self.median, self.weight
+        )
 
         # Cusum
         self.cusum = self.get_cusum(self.mag)
@@ -232,7 +249,7 @@ class VariabilityFeatures:
 
         # Created phased a folded light curve.
         # We use period * 2 to take eclipsing binaries into account.
-        phase_folded_date = self.date % (self.period * 2.)
+        phase_folded_date = self.date % (self.period * 2.0)
         sorted_index = np.argsort(phase_folded_date)
 
         folded_date = phase_folded_date[sorted_index]
@@ -242,8 +259,9 @@ class VariabilityFeatures:
         self.phase_eta = self.get_eta(folded_mag, self.weighted_std)
 
         # Slope percentile.
-        self.slope_per10, self.slope_per90 = \
-            self.slope_percentile(folded_date, folded_mag)
+        self.slope_per10, self.slope_per90 = self.slope_percentile(
+            folded_date, folded_mag
+        )
 
         # phase Cusum
         self.phase_cusum = self.get_cusum(folded_mag)
@@ -269,22 +287,20 @@ class VariabilityFeatures:
         """
 
         # DO NOT CHANGE THESE PARAMETERS.
-        oversampling = 3.
-        hifac = int((max(date) - min(date)) / len(date) / min_period * 2.)
+        oversampling = 3.0
+        hifac = int((max(date) - min(date)) / len(date) / min_period * 2.0)
 
         # Minimum hifac
         if hifac < 100:
             hifac = 100
 
         # Lomb-Scargle.
-        fx, fy, nout, jmax, prob = fasper(date, mag, oversampling, hifac,
-                                              n_threads)
+        fx, fy, nout, jmax, prob = fasper(date, mag, oversampling, hifac, n_threads)
 
         self.f = fx[jmax]
-        self.period = 1. / self.f
+        self.period = 1.0 / self.f
         self.period_uncertainty = self.get_period_uncertainty(fx, fy, jmax)
-        self.period_log10FAP = \
-            np.log10(significance(fx, fy, nout, oversampling)[jmax])
+        self.period_log10FAP = np.log10(significance(fx, fy, nout, oversampling)[jmax])
         self.period_SNR = (fy[jmax] - np.median(fy)) / np.std(fy)
 
         # Fit Fourier Series of order 3.
@@ -292,8 +308,7 @@ class VariabilityFeatures:
         # Initial guess of Fourier coefficients.
         p0 = np.ones(order * 2 + 1)
         date_period = (date % self.period) / self.period
-        p1, success = leastsq(self.residuals, p0,
-                              args=(date_period, mag, order))
+        p1, success = leastsq(self.residuals, p0, args=(date_period, mag, order))
 
         # Derive Fourier features for the first period.
         # Petersen, J. O., 1986, A&A
@@ -301,8 +316,8 @@ class VariabilityFeatures:
         self.r21 = np.sqrt(p1[3] ** 2 + p1[4] ** 2) / self.amplitude
         self.r31 = np.sqrt(p1[5] ** 2 + p1[6] ** 2) / self.amplitude
         self.f_phase = np.arctan(-p1[1] / p1[2])
-        self.phi21 = np.arctan(-p1[3] / p1[4]) - 2. * self.f_phase
-        self.phi31 = np.arctan(-p1[5] / p1[6]) - 3. * self.f_phase
+        self.phi21 = np.arctan(-p1[3] / p1[4]) - 2.0 * self.f_phase
+        self.phi31 = np.arctan(-p1[5] / p1[6]) - 3.0 * self.f_phase
 
     def get_period_uncertainty(self, fx, fy, jmax, fx_width=100):
         """
@@ -365,8 +380,7 @@ class VariabilityFeatures:
             right_index = right_index[0]
 
         # We assume the half of the full width is the period uncertainty.
-        half_width = (1. / fx_subset[left_index]
-                      - 1. / fx_subset[right_index]) / 2.
+        half_width = (1.0 / fx_subset[left_index] - 1.0 / fx_subset[right_index]) / 2.0
         period_uncertainty = half_width
 
         return period_uncertainty
@@ -405,8 +419,9 @@ class VariabilityFeatures:
 
         sums = pars[0]
         for i in range(order):
-            sums += pars[i * 2 + 1] * np.sin(2 * np.pi * (i + 1) * x) \
-                   + pars[i * 2 + 2] * np.cos(2 * np.pi * (i + 1) * x)
+            sums += pars[i * 2 + 1] * np.sin(2 * np.pi * (i + 1) * x) + pars[
+                i * 2 + 2
+            ] * np.cos(2 * np.pi * (i + 1) * x)
 
         return sums
 
@@ -430,8 +445,11 @@ class VariabilityFeatures:
         """
 
         residual = (mag - avg) / err
-        stetson_k = np.sum(np.fabs(residual)) \
-                    / np.sqrt(np.sum(residual * residual)) / np.sqrt(len(mag))
+        stetson_k = (
+            np.sum(np.fabs(residual))
+            / np.sqrt(np.sum(residual * residual))
+            / np.sqrt(len(mag))
+        )
 
         return stetson_k
 
@@ -464,18 +482,18 @@ class VariabilityFeatures:
         lower_weight = weight[index]
         lower_weight_sum = np.sum(lower_weight)
         lower_mag = mag[index]
-        lower_weighted_std = np.sum((lower_mag
-                                     - avg) ** 2 * lower_weight) / \
-                             lower_weight_sum
+        lower_weighted_std = (
+            np.sum((lower_mag - avg) ** 2 * lower_weight) / lower_weight_sum
+        )
 
         # For higher (brighter) magnitude than average.
         index = np.where(mag <= avg)
         higher_weight = weight[index]
         higher_weight_sum = np.sum(higher_weight)
         higher_mag = mag[index]
-        higher_weighted_std = np.sum((higher_mag
-                                      - avg) ** 2 * higher_weight) / \
-                              higher_weight_sum
+        higher_weighted_std = (
+            np.sum((higher_mag - avg) ** 2 * higher_weight) / higher_weight_sum
+        )
 
         # Return ratio.
         return np.sqrt(lower_weighted_std / higher_weighted_std)
@@ -497,8 +515,8 @@ class VariabilityFeatures:
             The value of Eta index.
         """
 
-        diff = mag[1:] - mag[:len(mag) - 1]
-        eta = np.sum(diff * diff) / (len(mag) - 1.) / std / std
+        diff = mag[1:] - mag[: len(mag) - 1]
+        eta = np.sum(diff * diff) / (len(mag) - 1.0) / std / std
 
         return eta
 
@@ -521,19 +539,19 @@ class VariabilityFeatures:
             90% percentile values of slope.
         """
 
-        date_diff = date[1:] - date[:len(date) - 1]
-        mag_diff = mag[1:] - mag[:len(mag) - 1]
+        date_diff = date[1:] - date[: len(date) - 1]
+        mag_diff = mag[1:] - mag[: len(mag) - 1]
 
         # Remove zero mag_diff.
-        index = np.where(mag_diff != 0.)
+        index = np.where(mag_diff != 0.0)
         date_diff = date_diff[index]
         mag_diff = mag_diff[index]
 
         # Derive slope.
         slope = date_diff / mag_diff
 
-        percentile_10 = np.percentile(slope, 10.)
-        percentile_90 = np.percentile(slope, 90.)
+        percentile_10 = np.percentile(slope, 10.0)
+        percentile_90 = np.percentile(slope, 90.0)
 
         return percentile_10, percentile_90
 

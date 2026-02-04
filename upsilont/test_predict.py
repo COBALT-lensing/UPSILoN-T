@@ -18,7 +18,7 @@ def run():
     err = err[index]
 
     logger = Logger().getLogger()
-    logger.info('Extract variability features.')
+    logger.info("Extract variability features.")
 
     feature_list = []
     for i in range(1):
@@ -29,20 +29,20 @@ def run():
         #     print('   %s: %f' % (key, value))
         feature_list.append(features)
 
-    logger.info('Convert to Pandas DataFrame.')
+    logger.info("Convert to Pandas DataFrame.")
     pd_features = pd.DataFrame(feature_list)
 
-    logger.info('Predict using UPSILoN-T.')
+    logger.info("Predict using UPSILoN-T.")
     ut = UPSILoNT(logger=logger)
     label, prob = ut.predict(pd_features, return_prob=True)
 
-    logger.info('Predicted class: {0}'.format(label))
-    logger.info('Probability: {0}'.format(prob))
-    logger.info('Corresponding classes: {0}'.format(ut.label_encoder.classes_))
-    logger.info('Done.')
+    logger.info("Predicted class: {0}".format(label))
+    logger.info("Probability: {0}".format(prob))
+    logger.info("Corresponding classes: {0}".format(ut.label_encoder.classes_))
+    logger.info("Done.")
 
     logger.handlers = []
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()
