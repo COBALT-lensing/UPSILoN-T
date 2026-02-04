@@ -109,3 +109,4 @@ venv.bak/
 .DS_Store
 .idea/deployment.xml
 test.py
+.vscode
