@@ -44,7 +44,7 @@ def apply_log10(x, min_x=None):
 
 
 class UPSILoNT:
-    def __init__(self, device='cuda:0', logger=None):
+    def __init__(self, device=None, logger=None):
         """
         UPSILoNT class initializer.
 
@@ -53,10 +53,18 @@ class UPSILoNT:
             logger: (optional) Log instance.
         """
 
+        if device is None:
+            device = torch.device(
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps" if torch.mps.is_available() else "cpu"
+            )
+
         # Check CUDA (so GPU) availability.
-        if not torch.cuda.is_available():
-            raise BaseException('Cannot initialize CUDA library. '
-                          'UPSILoN-T needs GPU to run.')
+        if device == "cpu":
+            raise BaseException(
+                "Cannot initialize CUDA library. " "UPSILoN-T needs GPU to run."
+            )
 
         # Set device.
         self.device = device
@@ -125,7 +133,7 @@ class UPSILoNT:
         else:
             genesis_model_path = os.path.join(output_folder, 'state_dict.pt')
 
-        net.load_state_dict(torch.load(genesis_model_path))
+        net.load_state_dict(torch.load(genesis_model_path, map_location=self.device))
 
         '''
         # Check the number of parameters in each layer.
