@@ -1,2 +1,3 @@
+recursive-include upsilont/datasets *
 recursive-include upsilont/images *
 recursive-include upsilont/model *
