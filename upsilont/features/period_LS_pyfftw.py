@@ -57,14 +57,14 @@ Reference:
     bib code: 1989ApJ...338..277P
 """
 
-from numpy import *
+import numpy
 
 try:
     import pyfftw
 
     is_pyfftw = True
-except:
-    from numpy.fft import *
+except ImportError:
+    from numpy import fft
 
     is_pyfftw = False
 
@@ -173,8 +173,8 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         wk1 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
         wk2 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
     else:
-        wk1 = zeros(ndim, dtype="complex")
-        wk2 = zeros(ndim, dtype="complex")
+        wk1 = fft.zeros(ndim, dtype="complex")
+        wk2 = fft.zeros(ndim, dtype="complex")
 
     fac = ndim / (xdif * ofac)
     fndim = ndim
@@ -196,8 +196,8 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         )
         wk2 = fft_wk2() * len(wk2)
     else:
-        wk1 = ifft(wk1) * len(wk1)
-        wk2 = ifft(wk2) * len(wk1)
+        wk1 = fft.ifft(wk1) * len(wk1)
+        wk2 = fft.ifft(wk2) * len(wk1)
 
     wk1 = wk1[1 : nout + 1]
     wk2 = wk2[1 : nout + 1]
@@ -213,19 +213,19 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     hc2wt = rwk2 / hypo2
     hs2wt = iwk2 / hypo2
 
-    cwt = sqrt(0.5 + hc2wt)
-    swt = sign(hs2wt) * (sqrt(0.5 - hc2wt))
+    cwt = numpy.sqrt(0.5 + hc2wt)
+    swt = numpy.sign(hs2wt) * (numpy.sqrt(0.5 - hc2wt))
     den = 0.5 * n + hc2wt * rwk2 + hs2wt * iwk2
     cterm = (cwt * rwk1 + swt * iwk1) ** 2.0 / den
     sterm = (cwt * iwk1 - swt * rwk1) ** 2.0 / (n - den)
 
-    wk1 = df * (arange(nout, dtype="float") + 1.0)
+    wk1 = df * (numpy.arange(nout, dtype="float") + 1.0)
     wk2 = (cterm + sterm) / (2.0 * var)
     pmax = wk2.max()
     jmax = wk2.argmax()
 
     # Estimate significance of largest peak value
-    expy = exp(-pmax)
+    expy = numpy.exp(-pmax)
     effm = 2.0 * (nout) / ofac
     prob = effm * expy
 
@@ -240,7 +240,7 @@ def significance(wk1, wk2, nout, ofac):
     Returns the peak false alarm probabilities
     Hence the lower is the probability and the more significant is the peak
     """
-    expy = exp(-wk2)
+    expy = numpy.exp(-wk2)
     effm = 2.0 * (nout) / ofac
     sig = effm * expy
     ind = (sig > 0.01).nonzero()
