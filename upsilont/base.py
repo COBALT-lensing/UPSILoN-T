@@ -594,10 +594,15 @@ class UPSILoNT:
             )
 
             # Build datasets.
+            self.logger.debug(f"Building datasets for iteration {i + 1}")
             trainset = LightCurveDataset(x_train, y_train)
             testset = LightCurveDataset(x_test, y_test)
+            self.logger.debug(
+                f"Datasets built - trainset size: {len(trainset)}, testset size: {len(testset)}"
+            )
 
             # Up-sampling imbalanced dataset.
+            self.logger.debug("Setting up sampling strategy")
             if balanced_sampling:
                 train_weights = self._get_balanced_sample_weights(y_train)
                 test_weights = self._get_balanced_sample_weights(y_test)
@@ -614,8 +619,10 @@ class UPSILoNT:
                 train_sampler = None
                 test_sampler = None
                 shuffle = True
+                self.logger.debug("Using standard shuffle")
 
             # Build data loaders.
+            self.logger.debug("Building data loaders")
             # batch_size = 1024
             batch_size = 10240
             trainloader = torch.utils.data.DataLoader(
@@ -632,8 +639,10 @@ class UPSILoNT:
                 sampler=test_sampler,
                 num_workers=2,
             )
+            self.logger.debug("Data loaders created successfully")
 
             # Initialize a network before entering the iteration.
+            self.logger.debug("Initializing network")
             net = Net()
             net.to(self.device)
             if base_net is not None:
@@ -643,14 +652,17 @@ class UPSILoNT:
 
             # Set the number of neurons at the final layers, which is
             # actually the number of target classes.
+            self.logger.debug(f"Setting final layer to {self.n_final} output features")
             net.fc4 = nn.Linear(net.bn4.num_features, self.n_final)
             net.bn5 = nn.BatchNorm1d(self.n_final)
             net.to(self.device)
+            self.logger.debug("Network initialized and moved to device")
 
             # Initial learning rate.
             learning_rate = 0.1
 
             # Set training instances.
+            self.logger.debug("Setting up optimizer and loss criterion")
             if base_net is not None:
                 # Transfer only the last layer.
                 if train_last:
@@ -665,15 +677,22 @@ class UPSILoNT:
                     self.logger.debug("Training all layers")
             else:
                 optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9)
+                self.logger.debug("Training from scratch")
 
             scheduler = ReduceLROnPlateau(optimizer, "min", patience=3, eps=1e-15)
             if weight_class:
                 criterion = nn.CrossEntropyLoss(weight=class_weights)
+                self.logger.debug("Using weighted loss criterion")
             else:
                 criterion = nn.CrossEntropyLoss()
+                self.logger.debug("Using standard loss criterion")
 
             # Iterate.
+            self.logger.debug(f"Starting epoch loop for {n_epoch} epochs")
             for epoch in range(n_epoch):
+                self.logger.debug(
+                    f"Iteration {i + 1}/{n_iter}, Epoch {epoch + 1}/{n_epoch}"
+                )
                 running_loss = 0.0
 
                 # Iterate learning rate.
@@ -684,58 +703,81 @@ class UPSILoNT:
                 predicted_label = []
                 true_label = []
                 net.train()
+                self.logger.debug("Starting training batches")
                 for batch_idx, data in enumerate(trainloader, 0):
-                    # Get the inputs.
-                    inputs, labels = data
-                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+                    try:
+                        # Get the inputs.
+                        inputs, labels = data
+                        inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-                    # Zero the parameter gradients.
-                    optimizer.zero_grad()
+                        # Zero the parameter gradients.
+                        optimizer.zero_grad()
 
-                    # Forward + backward + optimize.
-                    outputs = net(inputs)
-                    loss = criterion(outputs, labels)
+                        # Forward + backward + optimize.
+                        outputs = net(inputs)
+                        loss = criterion(outputs, labels)
 
-                    # Get true and predicted labels.
-                    outputs_numpy = torch.max(outputs, 1)[1].cpu().numpy()
-                    test_numpy = labels.cpu().numpy()
-                    predicted_label += outputs_numpy.tolist()
-                    true_label += test_numpy.tolist()
+                        # Get true and predicted labels.
+                        outputs_numpy = torch.max(outputs, 1)[1].cpu().numpy()
+                        test_numpy = labels.cpu().numpy()
+                        predicted_label += outputs_numpy.tolist()
+                        true_label += test_numpy.tolist()
 
-                    loss.backward()
-                    optimizer.step()
+                        loss.backward()
+                        optimizer.step()
 
-                    # Running loss.
-                    running_loss += loss.item()
+                        # Running loss.
+                        running_loss += loss.item()
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error in training batch {batch_idx}: {str(e)}",
+                            exc_info=True,
+                        )
+                        raise
 
                 # Calculate training f1.
+                self.logger.debug("Calculating training metrics")
                 training_f1 = f1_score(true_label, predicted_label, average=f1_average)
                 training_mc = matthews_corrcoef(true_label, predicted_label)
                 training_mc = (training_mc + 1) / 2.0
+                self.logger.debug(
+                    f"Training metrics - F1: {training_f1:.6f}, MC: {training_mc:.6f}"
+                )
 
                 # Get test-set performance
+                self.logger.debug("Starting validation batches")
                 val_loss = 0.0
                 predicted_label = []
                 true_label = []
                 net.eval()
-                for batch_idx, test_data in enumerate(testloader, 0):
-                    test_inputs, test_labels = test_data
-                    test_inputs, test_labels = test_inputs.to(
-                        self.device
-                    ), test_labels.to(self.device)
+                try:
+                    for batch_idx, test_data in enumerate(testloader, 0):
+                        test_inputs, test_labels = test_data
+                        test_inputs, test_labels = test_inputs.to(
+                            self.device
+                        ), test_labels.to(self.device)
 
-                    outputs = net(test_inputs)
-                    val_loss += criterion(outputs, test_labels).item()
+                        outputs = net(test_inputs)
+                        val_loss += criterion(outputs, test_labels).item()
 
-                    # Get true and predicted labels.
-                    outputs_numpy = torch.max(outputs, 1)[1].cpu().numpy()
-                    test_numpy = test_labels.cpu().numpy()
-                    predicted_label += outputs_numpy.tolist()
-                    true_label += test_numpy.tolist()
+                        # Get true and predicted labels.
+                        outputs_numpy = torch.max(outputs, 1)[1].cpu().numpy()
+                        test_numpy = test_labels.cpu().numpy()
+                        predicted_label += outputs_numpy.tolist()
+                        true_label += test_numpy.tolist()
+                except Exception as e:
+                    self.logger.error(
+                        f"Error in validation batch {batch_idx}: {str(e)}",
+                        exc_info=True,
+                    )
+                    raise
 
                 test_f1 = f1_score(true_label, predicted_label, average=f1_average)
                 test_mc = matthews_corrcoef(true_label, predicted_label)
                 test_mc = (test_mc + 1) / 2.0
+                self.logger.debug(
+                    f"Validation metrics - F1: {test_f1:.6f}, MC: {test_mc:.6f}"
+                )
 
                 curr_f1 = test_f1
                 curr_mc = test_mc
@@ -762,6 +804,7 @@ class UPSILoNT:
                 )
 
                 # Save training information for later usage.
+                self.logger.debug("Saving training information")
                 training_info["learning_rate"].append(optimizer.param_groups[0]["lr"])
                 training_info["training_loss"].append(running_loss)
                 training_info["validation_loss"].append(val_loss)
@@ -772,15 +815,22 @@ class UPSILoNT:
 
                 # We save at the end of each epoch,
                 # just in case the training stops unexpectedly.
-                pickle.dump(
-                    training_info,
-                    open(os.path.join(output_folder, "training_info.pkl"), "wb"),
-                )
+                try:
+                    pickle.dump(
+                        training_info,
+                        open(os.path.join(output_folder, "training_info.pkl"), "wb"),
+                    )
+                    self.logger.debug("Training info pickled successfully")
+                except Exception as e:
+                    self.logger.error(
+                        f"Error pickling training info: {str(e)}", exc_info=True
+                    )
 
                 # Update the best f1 score.
                 if curr_f1 > best_f1:
                     best_f1 = curr_f1
                     self.f1_best = best_f1
+                    self.logger.debug(f"New best F1: {best_f1:.6f}")
 
                 # Only if the new model is better.
                 if curr_mc > best_mc:
@@ -792,26 +842,47 @@ class UPSILoNT:
                     )
 
                     # Save the model.
-                    torch.save(
-                        net.state_dict(), os.path.join(output_folder, "state_dict.pt")
-                    )
-                    self.net = net
-                    # self.logger.info('Better model saved.')
+                    try:
+                        torch.save(
+                            net.state_dict(),
+                            os.path.join(output_folder, "state_dict.pt"),
+                        )
+                        self.net = net
+                        self.logger.debug("Model saved successfully")
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error saving model: {str(e)}", exc_info=True
+                        )
 
                     # Save true and predicted labels for later usages.
-                    pickle.dump(
-                        [true_label, predicted_label],
-                        open(os.path.join(output_folder, "true_predicted.pkl"), "wb"),
-                    )
+                    try:
+                        pickle.dump(
+                            [true_label, predicted_label],
+                            open(
+                                os.path.join(output_folder, "true_predicted.pkl"), "wb"
+                            ),
+                        )
+                        self.logger.debug("True/predicted labels saved")
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error saving labels: {str(e)}", exc_info=True
+                        )
 
                     # Save the best mc as a plain text for temporary saving.
-                    fp = open(os.path.join(output_folder, "info.txt"), "w")
-                    fp.writelines(
-                        "# Mc: {0:.6f}, F1: {1:.6f}\n".format(best_mc, best_f1)
-                    )
-                    fp.close()
+                    try:
+                        fp = open(os.path.join(output_folder, "info.txt"), "w")
+                        fp.writelines(
+                            "# Mc: {0:.6f}, F1: {1:.6f}\n".format(best_mc, best_f1)
+                        )
+                        fp.close()
+                        self.logger.debug("Info file saved")
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error saving info file: {str(e)}", exc_info=True
+                        )
 
                 # Scheduler based on validation loss (i.e. test-set loss).
+                self.logger.debug("Stepping scheduler")
                 scheduler.step(val_loss)
 
             # Epoch ends.
