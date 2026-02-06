@@ -288,7 +288,15 @@ class UPSILoNT:
 
         # Load the genesis model if none.
         if self.net is None:
+            self.logger.info("Loading pre-trained model for transfer learning.")
             self.load()
+        else:
+            self.logger.info("Using existing loaded model for transfer learning.")
+
+        self.logger.info(
+            f"Starting transfer learning with {len(features)} samples and "
+            f"{len(features.columns)} features."
+        )
 
         # Transfer.
         self._train(
@@ -307,6 +315,8 @@ class UPSILoNT:
             refit_n_epoch=refit_n_epoch,
             verbose=verbose,
         )
+
+        self.logger.info("Transfer learning completed.")
 
     def train(
         self,
@@ -347,6 +357,17 @@ class UPSILoNT:
             verbose: (optional) Print training information if True.
         """
 
+        self.logger.debug(
+            f"Training from scratch with {len(features)} samples "
+            f"and {len(features.columns)} features."
+        )
+        self.logger.debug(
+            f"Parameters: n_iter={n_iter}, n_epoch={n_epoch}, "
+            f"train_size={train_size}, out_features={out_features}, "
+            f"weight_class={weight_class}, balanced_sampling={balanced_sampling}, "
+            f"refit={refit}, refit_n_epoch={refit_n_epoch}"
+        )
+
         self._train(
             features.copy(),
             labels.copy(),
@@ -361,6 +382,8 @@ class UPSILoNT:
             refit_n_epoch=refit_n_epoch,
             verbose=verbose,
         )
+
+        self.logger.debug("Training from scratch completed.")
 
     def _get_balanced_sample_weights(self, labels):
         """
@@ -425,6 +448,11 @@ class UPSILoNT:
             verbose: (optional) Print training information if True.
         """
 
+        self.logger.debug(
+            f"_train() called with n_iter={n_iter}, n_epoch={n_epoch}, "
+            f"train_size={train_size}, out_features={out_features}"
+        )
+
         # weight_class and balanced_sample cannot be True at the same time.
         # if weight_class and balanced_sample:
         #     raise ValueError('weight_class and balanced_sample cannot be '
@@ -433,9 +461,11 @@ class UPSILoNT:
         # Make an output folder if not exist.
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
+            self.logger.debug(f"Created output folder: {output_folder}")
 
         # apply log10 to some features.
         # TODO: fine this code.
+        self.logger.debug("Applying log10 transformation to features")
         features["period"], min_period = apply_log10(features["period"])
         features["amplitude"], min_amplitude = apply_log10(features["amplitude"])
         features["hl_amp_ratio"], min_hl_amp_ratio = apply_log10(
@@ -469,6 +499,10 @@ class UPSILoNT:
         features = np.array(features)
         labels = np.array(labels)
 
+        self.logger.debug(
+            f"Features shape: {features.shape}, Labels shape: {labels.shape}"
+        )
+
         # Normalize.
         features_median = np.median(features, axis=0)
         features_std = np.std(features, axis=0)
@@ -487,6 +521,8 @@ class UPSILoNT:
             self.n_final = np.unique(labels).size
         else:
             self.n_final = out_features
+
+        self.logger.debug(f"Number of output features: {self.n_final}")
 
         # Save.
         pickle.dump(
@@ -507,6 +543,8 @@ class UPSILoNT:
         le.fit(labels)
         labels_encoded = le.transform(labels)
 
+        self.logger.debug(f"Label classes: {le.classes_}")
+
         # Save the label encoder.
         self.label_encoder = le
         pickle.dump(
@@ -522,6 +560,7 @@ class UPSILoNT:
             # weights = rev_counts / np.sum(rev_counts)
             weights = np.sum(counts) / counts
             class_weights = torch.FloatTensor(weights).to(self.device)
+            self.logger.debug(f"Class weights: {weights}")
 
         # Training information.
         training_info = {
@@ -539,6 +578,8 @@ class UPSILoNT:
         best_mc = 0.0
         f1_average = "macro"
         for i in range(n_iter):
+            self.logger.debug(f"Starting iteration {i + 1}/{n_iter}")
+
             # Train and test set split. So each iteration,
             # using a set separated differently.
             x_train, x_test, y_train, y_test = train_test_split(
@@ -546,6 +587,10 @@ class UPSILoNT:
                 labels_encoded,
                 train_size=train_size,
                 stratify=labels_encoded,
+            )
+
+            self.logger.debug(
+                f"Train/test split - train: {x_train.shape}, test: {x_test.shape}"
             )
 
             # Build datasets.
@@ -564,6 +609,7 @@ class UPSILoNT:
                     test_weights, len(test_weights), replacement=True
                 )
                 shuffle = False
+                self.logger.debug("Using balanced sampling")
             else:
                 train_sampler = None
                 test_sampler = None
@@ -593,6 +639,7 @@ class UPSILoNT:
             if base_net is not None:
                 # For transfer learning.
                 net.load_state_dict(base_net.state_dict())
+                self.logger.debug("Loaded base network for transfer learning")
 
             # Set the number of neurons at the final layers, which is
             # actually the number of target classes.
@@ -610,10 +657,12 @@ class UPSILoNT:
                     optimizer = optim.SGD(
                         net.fc4.parameters(), lr=learning_rate, momentum=0.9
                     )
+                    self.logger.debug("Training last layer only")
                 else:
                     optimizer = optim.SGD(
                         net.parameters(), lr=learning_rate, momentum=0.9
                     )
+                    self.logger.debug("Training all layers")
             else:
                 optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9)
 
@@ -635,7 +684,7 @@ class UPSILoNT:
                 predicted_label = []
                 true_label = []
                 net.train()
-                for l, data in enumerate(trainloader, 0):
+                for batch_idx, data in enumerate(trainloader, 0):
                     # Get the inputs.
                     inputs, labels = data
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -669,7 +718,7 @@ class UPSILoNT:
                 predicted_label = []
                 true_label = []
                 net.eval()
-                for m, test_data in enumerate(testloader, 0):
+                for batch_idx, test_data in enumerate(testloader, 0):
                     test_inputs, test_labels = test_data
                     test_inputs, test_labels = test_inputs.to(
                         self.device
@@ -706,6 +755,12 @@ class UPSILoNT:
                         )
                     )
 
+                self.logger.debug(
+                    f"Epoch {epoch + 1}: train_loss={running_loss:.6f}, "
+                    f"val_loss={val_loss:.6f}, train_f1={training_f1:.6f}, "
+                    f"test_f1={curr_f1:.6f}"
+                )
+
                 # Save training information for later usage.
                 training_info["learning_rate"].append(optimizer.param_groups[0]["lr"])
                 training_info["training_loss"].append(running_loss)
@@ -731,6 +786,10 @@ class UPSILoNT:
                 if curr_mc > best_mc:
                     best_mc = curr_mc
                     self.mc_best = best_mc
+
+                    self.logger.debug(
+                        f"New best model: Mc={best_mc:.6f}, F1={best_f1:.6f}"
+                    )
 
                     # Save the model.
                     torch.save(
@@ -768,6 +827,8 @@ class UPSILoNT:
         # The whole training finishes. #
         ################################
 
+        self.logger.debug("Training completed, calculating statistics")
+
         # Get the best test F1 for each iteration.
         test_f1 = np.max(
             np.array(training_info["test_f1"]).reshape(-1, n_epoch), axis=1
@@ -785,6 +846,15 @@ class UPSILoNT:
         self.mc_mean = np.mean(test_mc)
         self.mc_median = np.median(test_mc)
         self.mc_std = np.std(test_mc)
+
+        self.logger.debug(
+            f"F1 - mean: {self.f1_mean:.6f}, median: {self.f1_median:.6f}, "
+            f"std: {self.f1_std:.6f}"
+        )
+        self.logger.debug(
+            f"Mc - mean: {self.mc_mean:.6f}, median: {self.mc_median:.6f}, "
+            f"std: {self.mc_std:.6f}"
+        )
 
         # Save F1 information.
         fp = open(os.path.join(output_folder, "info.txt"), "w")
