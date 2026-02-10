@@ -251,6 +251,10 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     cterm = (cwt * rwk1 + swt * iwk1) ** 2.0 / den
     sterm = (cwt * iwk1 - swt * rwk1) ** 2.0 / (n - den)
 
+    # Ensure cterm and sterm are regular arrays
+    cterm = numpy.asarray(cterm)
+    sterm = numpy.asarray(sterm)
+
     wk1 = df * (numpy.arange(nout, dtype="float") + 1.0)
     wk2 = (cterm + sterm) / (2.0 * var)
     pmax = wk2.max()
