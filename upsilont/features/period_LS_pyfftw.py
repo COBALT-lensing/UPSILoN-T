@@ -149,12 +149,22 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     """
     # Convert input arrays to regular numpy arrays to avoid masked array issues
     if hasattr(x, "filled"):
-        x = numpy.asarray(x.filled())
+        # For astropy masked arrays, use filled with a default value or convert directly
+        try:
+            x = numpy.asarray(x.filled(numpy.nan))
+        except TypeError:
+            # If filled() doesn't work, try to get the data directly
+            x = numpy.asarray(x.data if hasattr(x, "data") else x)
     else:
         x = numpy.asarray(x, dtype="float64")
 
     if hasattr(y, "filled"):
-        y = numpy.asarray(y.filled())
+        # For astropy masked arrays, use filled with a default value or convert directly
+        try:
+            y = numpy.asarray(y.filled(numpy.nan))
+        except TypeError:
+            # If filled() doesn't work, try to get the data directly
+            y = numpy.asarray(y.data if hasattr(y, "data") else y)
     else:
         y = numpy.asarray(y, dtype="float64")
 
