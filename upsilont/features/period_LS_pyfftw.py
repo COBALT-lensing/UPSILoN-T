@@ -221,6 +221,18 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
 
     wk1 = wk1[1 : nout + 1]
     wk2 = wk2[1 : nout + 1]
+
+    # Convert to regular arrays to avoid masked array issues
+    if hasattr(wk1, "filled"):
+        wk1 = numpy.asarray(wk1.filled())
+    else:
+        wk1 = numpy.asarray(wk1)
+
+    if hasattr(wk2, "filled"):
+        wk2 = numpy.asarray(wk2.filled())
+    else:
+        wk2 = numpy.asarray(wk2)
+
     rwk1 = wk1.real
     iwk1 = wk1.imag
     rwk2 = wk2.real
@@ -240,12 +252,7 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     sterm = (cwt * iwk1 - swt * rwk1) ** 2.0 / (n - den)
 
     wk1 = df * (numpy.arange(nout, dtype="float") + 1.0)
-    wk2_result = (cterm + sterm) / (2.0 * var)
-    # Handle masked arrays if present
-    if hasattr(wk2_result, "filled"):
-        wk2 = numpy.asarray(wk2_result.filled(), dtype="float")
-    else:
-        wk2 = numpy.asarray(wk2_result, dtype="float")
+    wk2 = (cterm + sterm) / (2.0 * var)
     pmax = wk2.max()
     jmax = wk2.argmax()
 
