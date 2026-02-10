@@ -240,7 +240,12 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     sterm = (cwt * iwk1 - swt * rwk1) ** 2.0 / (n - den)
 
     wk1 = df * (numpy.arange(nout, dtype="float") + 1.0)
-    wk2 = numpy.asarray((cterm + sterm) / (2.0 * var), dtype="float")
+    wk2_result = (cterm + sterm) / (2.0 * var)
+    # Handle masked arrays if present
+    if hasattr(wk2_result, "filled"):
+        wk2 = numpy.asarray(wk2_result.filled(), dtype="float")
+    else:
+        wk2 = numpy.asarray(wk2_result, dtype="float")
     pmax = wk2.max()
     jmax = wk2.argmax()
 
