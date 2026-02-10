@@ -140,14 +140,36 @@ class VariabilityFeatures:
         # Set basic values.
         if not isinstance(date, np.ndarray):
             date = np.array(date)
+        else:
+            # Convert masked arrays to regular arrays
+            if hasattr(date, "filled"):
+                try:
+                    date = np.asarray(date.filled(np.nan))
+                except TypeError:
+                    date = np.asarray(date.data if hasattr(date, "data") else date)
+
         if not isinstance(mag, np.ndarray):
             mag = np.array(mag)
+        else:
+            # Convert masked arrays to regular arrays
+            if hasattr(mag, "filled"):
+                try:
+                    mag = np.asarray(mag.filled(np.nan))
+                except TypeError:
+                    mag = np.asarray(mag.data if hasattr(mag, "data") else mag)
 
         self.date = date
         self.mag = mag
         if err is not None:
             if not isinstance(err, np.ndarray):
                 err = np.array(err)
+            else:
+                # Convert masked arrays to regular arrays
+                if hasattr(err, "filled"):
+                    try:
+                        err = np.asarray(err.filled(np.nan))
+                    except TypeError:
+                        err = np.asarray(err.data if hasattr(err, "data") else err)
             self.err = err
         else:
             self.err = np.ones(len(self.mag)) * np.std(self.mag)
