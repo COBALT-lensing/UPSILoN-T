@@ -270,7 +270,7 @@ def significance(wk1, wk2, nout, ofac):
     expy = numpy.exp(-wk2)
     effm = 2.0 * (nout) / ofac
     sig = effm * expy
-    ind = (sig > 0.01).nonzero()
-    sig[ind] = 1.0 - (1.0 - expy[ind]) ** effm
+    mask = sig > 0.01
+    numpy.putmask(sig, mask, 1.0 - (1.0 - expy) ** effm)
 
     return sig
