@@ -147,6 +147,17 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         02/23/2009, v1.0, MF
             Translation of IDL code (orig. Numerical recipies)
     """
+    # Convert input arrays to regular numpy arrays to avoid masked array issues
+    if hasattr(x, "filled"):
+        x = numpy.asarray(x.filled())
+    else:
+        x = numpy.asarray(x, dtype="float64")
+
+    if hasattr(y, "filled"):
+        y = numpy.asarray(y.filled())
+    else:
+        y = numpy.asarray(y, dtype="float64")
+
     # Check dimensions of input arrays
     n = int(len(x))
     logger.debug(f"fasper: input array length n={n}")
@@ -222,16 +233,9 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     wk1 = wk1[1 : nout + 1]
     wk2 = wk2[1 : nout + 1]
 
-    # Convert to regular arrays to avoid masked array issues
-    if hasattr(wk1, "filled"):
-        wk1 = numpy.asarray(wk1.filled())
-    else:
-        wk1 = numpy.asarray(wk1)
-
-    if hasattr(wk2, "filled"):
-        wk2 = numpy.asarray(wk2.filled())
-    else:
-        wk2 = numpy.asarray(wk2)
+    # Ensure we're working with regular arrays
+    wk1 = numpy.asarray(wk1)
+    wk2 = numpy.asarray(wk2)
 
     rwk1 = numpy.asarray(wk1.real)
     iwk1 = numpy.asarray(wk1.imag)
