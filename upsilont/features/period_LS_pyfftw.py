@@ -57,6 +57,7 @@ Reference:
     bib code: 1989ApJ...338..277P
 """
 
+import logging
 import numpy
 
 try:
@@ -68,6 +69,9 @@ except ImportError:
 
     is_pyfftw = False
 
+# Configure logger
+logger = logging.getLogger(__name__)
+
 
 def __spread__(y, yy, n, x, m):
     """
@@ -78,8 +82,9 @@ def __spread__(y, yy, n, x, m):
     """
     nfac = [0, 1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880]
     if m > 10.0:
-        print("factorial table too small in spread")
+        logger.error("factorial table too small in spread")
         return
+    logger.debug(f"__spread__: y={y}, n={n}, x={x}, m={m}")
 
     ix = int(x)
     if x == float(ix):
@@ -144,11 +149,14 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     """
     # Check dimensions of input arrays
     n = int(len(x))
+    logger.debug(f"fasper: input array length n={n}")
     if n != len(y):
-        print("Incompatible arrays.")
+        logger.error(f"Incompatible arrays: len(x)={len(x)}, len(y)={len(y)}")
         return
 
-    # print x, y, hifac, ofac
+    logger.debug(
+        f"fasper parameters: ofac={ofac}, hifac={hifac}, n_threads={n_threads}, MACC={MACC}"
+    )
 
     nout = int(0.5 * ofac * hifac * n)
     nfreqt = int(ofac * hifac * n * MACC)  # Size the FFT as next power
@@ -158,6 +166,9 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         nfreq = 2 * nfreq
 
     ndim = int(2 * nfreq)
+    logger.debug(
+        f"fasper FFT setup: nout={nout}, nfreqt={nfreqt}, nfreq={nfreq}, ndim={ndim}"
+    )
 
     # Compute the mean, variance
     ave = y.mean()
@@ -167,12 +178,17 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     xmin = x.min()
     xmax = x.max()
     xdif = xmax - xmin
+    logger.debug(
+        f"fasper data statistics: mean={ave:.6f}, variance={var:.6f}, x_range=[{xmin:.6f}, {xmax:.6f}], xdif={xdif:.6f}"
+    )
 
     # extrapolate the data into the workspaces
     if is_pyfftw:
+        logger.debug("fasper: using pyfftw for FFT")
         wk1 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
         wk2 = pyfftw.n_byte_align_empty(int(ndim), 16, "complex") * 0.0
     else:
+        logger.debug("fasper: using numpy.fft for FFT")
         wk1 = numpy.zeros(ndim, dtype="complex")
         wk2 = numpy.zeros(ndim, dtype="complex")
 
@@ -181,10 +197,12 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     ck = ((x - xmin) * fac) % fndim
     ckk = (2.0 * ck) % fndim
 
+    logger.debug(f"fasper: spreading {n} data points across workspaces")
     for j in range(0, n):
         __spread__(y[j] - ave, wk1, ndim, ck[j], MACC)
         __spread__(1.0, wk2, ndim, ckk[j], MACC)
 
+    logger.debug("fasper: performing FFT computations")
     # Take the Fast Fourier Transforms.
     if is_pyfftw:
         fft_wk1 = pyfftw.builders.ifft(
@@ -224,6 +242,8 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     pmax = wk2.max()
     jmax = wk2.argmax()
 
+    logger.debug(f"fasper: maximum periodogram value={pmax:.6f} at index={jmax}")
+
     # Estimate significance of largest peak value
     expy = numpy.exp(-pmax)
     effm = 2.0 * (nout) / ofac
@@ -231,6 +251,11 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
 
     if prob > 0.01:
         prob = 1.0 - (1.0 - expy) ** effm
+
+    logger.debug(
+        f"fasper: returning - nout={nout}, jmax={jmax}, pmax={pmax:.6f}, prob={prob:.6e}"
+    )
+    logger.info(f"fasper: peak frequency={wk1[jmax]:.6f}, significance={prob:.6e}")
 
     return wk1, wk2, nout, jmax, prob
 
