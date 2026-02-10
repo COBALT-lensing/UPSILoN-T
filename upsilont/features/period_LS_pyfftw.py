@@ -233,10 +233,10 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     else:
         wk2 = numpy.asarray(wk2)
 
-    rwk1 = wk1.real
-    iwk1 = wk1.imag
-    rwk2 = wk2.real
-    iwk2 = wk2.imag
+    rwk1 = numpy.asarray(wk1.real)
+    iwk1 = numpy.asarray(wk1.imag)
+    rwk2 = numpy.asarray(wk2.real)
+    iwk2 = numpy.asarray(wk2.imag)
 
     df = 1.0 / (xdif * ofac)
 
