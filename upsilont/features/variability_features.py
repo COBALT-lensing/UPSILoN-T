@@ -4,6 +4,7 @@ https://github.com/dwkim78/upsilon
 """
 
 import warnings
+import logging
 import multiprocessing
 
 import numpy as np
@@ -98,6 +99,11 @@ class VariabilityFeatures:
             The minimum period to calculate.
         """
 
+        self.logger = logging.getLogger(__name__)
+        self.logger.debug(
+            f"Initializing VariabilityFeatures with {len(date)} data points"
+        )
+
         # Variable to calculate.
         self.n_points = None
         self.weight = None
@@ -152,41 +158,57 @@ class VariabilityFeatures:
             or (len(self.date) != len(self.err))
             or (len(self.mag) != len(self.err))
         ):
+            self.logger.error(
+                "Mismatched array lengths: date, mag, and err must have same length"
+            )
             raise RuntimeError("The length of date, mag, and err must be same.")
 
         # if the number of data points is too small.
         min_n_data = 80
         if len(self.date) < min_n_data:
+            self.logger.warning(
+                "The number of data points are less than %d." % min_n_data
+            )
             warnings.warn("The number of data points are less than %d." % min_n_data)
 
         n_threads = int(n_threads)
         if n_threads > multiprocessing.cpu_count():
             self.n_threads = multiprocessing.cpu_count()
+            self.logger.debug(
+                f"Requested threads {n_threads} exceeds CPU count, using {self.n_threads}"
+            )
         else:
             if n_threads <= 0:
                 self.n_threads = 1
             else:
                 self.n_threads = n_threads
+        self.logger.debug(f"Using {self.n_threads} threads for period detection")
 
         min_period = float(min_period)
         if min_period <= 0:
             self.min_period = 0.03
+            self.logger.debug(f"Invalid min_period {min_period}, using 0.03")
         else:
             self.min_period = min_period
+        self.logger.debug(f"Minimum period set to {self.min_period}")
 
         # Extract features.
         self.run()
 
     def run(self):
         """Run feature extraction modules."""
+        self.logger.info("Starting feature extraction")
 
         # shallow_run must be executed prior to deep_run
         # since shallow_run calculates several values needed for deep_run.
         self.shallow_run()
         self.deep_run()
 
+        self.logger.info("Feature extraction completed successfully")
+
     def shallow_run(self):
         """Derive not-period-based features."""
+        self.logger.debug("Starting shallow_run (non-period-based features)")
         # Number of data points
         self.n_points = len(self.date)
 
@@ -238,8 +260,13 @@ class VariabilityFeatures:
         # Eta
         self.eta = self.get_eta(self.mag, self.weighted_std)
 
+        self.logger.debug(
+            f"Shallow run completed: mean={self.mean:.4f}, std={self.std:.4f}, skewness={self.skewness:.4f}"
+        )
+
     def deep_run(self):
         """Derive period-based features."""
+        self.logger.debug("Starting deep_run (period-based features)")
         # Lomb-Scargle period finding.
         self.get_period_LS(self.date, self.mag, self.n_threads, self.min_period)
 
@@ -266,6 +293,10 @@ class VariabilityFeatures:
         # phase Cusum
         self.phase_cusum = self.get_cusum(folded_mag)
 
+        self.logger.debug(
+            f"Deep run completed: period={self.period:.6f}, amplitude={self.amplitude:.4f}, SNR={self.period_SNR:.4f}"
+        )
+
     def get_period_LS(self, date, mag, n_threads, min_period):
         """
         Period finding using the Lomb-Scargle algorithm.
@@ -285,6 +316,9 @@ class VariabilityFeatures:
         min_period : float
             The minimum period to calculate.
         """
+        self.logger.debug(
+            f"Starting Lomb-Scargle period detection with min_period={min_period}"
+        )
 
         # DO NOT CHANGE THESE PARAMETERS.
         oversampling = 3.0
@@ -294,7 +328,12 @@ class VariabilityFeatures:
         if hifac < 100:
             hifac = 100
 
+        self.logger.debug(
+            f"Lomb-Scargle parameters: oversampling={oversampling}, hifac={hifac}"
+        )
+
         # Lomb-Scargle.
+        self.logger.debug("Computing Lomb-Scargle power spectrum...")
         fx, fy, nout, jmax, prob = fasper(date, mag, oversampling, hifac, n_threads)
 
         self.f = fx[jmax]
@@ -303,12 +342,21 @@ class VariabilityFeatures:
         self.period_log10FAP = np.log10(significance(fx, fy, nout, oversampling)[jmax])
         self.period_SNR = (fy[jmax] - np.median(fy)) / np.std(fy)
 
+        self.logger.debug(
+            f"Detected period: {self.period:.6f} days (frequency: {self.f:.6f}), SNR: {self.period_SNR:.4f}"
+        )
+        self.logger.debug(
+            f"Period uncertainty: {self.period_uncertainty:.6f}, log10FAP: {self.period_log10FAP:.4f}"
+        )
+
         # Fit Fourier Series of order 3.
         order = 3
         # Initial guess of Fourier coefficients.
         p0 = np.ones(order * 2 + 1)
         date_period = (date % self.period) / self.period
+        self.logger.debug("Fitting Fourier series to phase-folded light curve...")
         p1, success = leastsq(self.residuals, p0, args=(date_period, mag, order))
+        self.logger.debug(f"Fourier series fit success: {success}")
 
         # Derive Fourier features for the first period.
         # Petersen, J. O., 1986, A&A
@@ -318,6 +366,10 @@ class VariabilityFeatures:
         self.f_phase = np.arctan(-p1[1] / p1[2])
         self.phi21 = np.arctan(-p1[3] / p1[4]) - 2.0 * self.f_phase
         self.phi31 = np.arctan(-p1[5] / p1[6]) - 3.0 * self.f_phase
+
+        self.logger.debug(
+            f"Fourier features: amplitude={self.amplitude:.4f}, r21={self.r21:.4f}, r31={self.r31:.4f}"
+        )
 
     def get_period_uncertainty(self, fx, fy, jmax, fx_width=100):
         """
@@ -347,6 +399,7 @@ class VariabilityFeatures:
         p_uncertain : float
             Period uncertainty.
         """
+        self.logger.debug(f"Calculating period uncertainty around peak index {jmax}")
 
         # Get subset
         start_index = jmax - fx_width
@@ -382,6 +435,8 @@ class VariabilityFeatures:
         # We assume the half of the full width is the period uncertainty.
         half_width = (1.0 / fx_subset[left_index] - 1.0 / fx_subset[right_index]) / 2.0
         period_uncertainty = half_width
+
+        self.logger.debug(f"Period uncertainty calculated: {period_uncertainty:.6f}")
 
         return period_uncertainty
 
@@ -443,6 +498,7 @@ class VariabilityFeatures:
         stetson_k : float
             Stetson K value.
         """
+        self.logger.debug("Calculating Stetson K statistic")
 
         residual = (mag - avg) / err
         stetson_k = (
@@ -450,6 +506,8 @@ class VariabilityFeatures:
             / np.sqrt(np.sum(residual * residual))
             / np.sqrt(len(mag))
         )
+
+        self.logger.debug(f"Stetson K calculated: {stetson_k:.4f}")
 
         return stetson_k
 
@@ -476,6 +534,7 @@ class VariabilityFeatures:
         hl_ratio : float
             Ratio of amplitude of higher and lower magnitudes than average.
         """
+        self.logger.debug("Calculating magnitude amplitude ratio (higher/lower)")
 
         # For lower (fainter) magnitude than average.
         index = np.where(mag > avg)
@@ -496,7 +555,9 @@ class VariabilityFeatures:
         )
 
         # Return ratio.
-        return np.sqrt(lower_weighted_std / higher_weighted_std)
+        ratio = np.sqrt(lower_weighted_std / higher_weighted_std)
+        self.logger.debug(f"HL amplitude ratio calculated: {ratio:.4f}")
+        return ratio
 
     def get_eta(self, mag, std):
         """
@@ -514,9 +575,12 @@ class VariabilityFeatures:
         eta : float
             The value of Eta index.
         """
+        self.logger.debug("Calculating Eta feature")
 
         diff = mag[1:] - mag[: len(mag) - 1]
         eta = np.sum(diff * diff) / (len(mag) - 1.0) / std / std
+
+        self.logger.debug(f"Eta calculated: {eta:.4f}")
 
         return eta
 
@@ -538,6 +602,7 @@ class VariabilityFeatures:
         per_90 : float
             90% percentile values of slope.
         """
+        self.logger.debug("Calculating slope percentiles (10th and 90th)")
 
         date_diff = date[1:] - date[: len(date) - 1]
         mag_diff = mag[1:] - mag[: len(mag) - 1]
@@ -552,6 +617,10 @@ class VariabilityFeatures:
 
         percentile_10 = np.percentile(slope, 10.0)
         percentile_90 = np.percentile(slope, 90.0)
+
+        self.logger.debug(
+            f"Slope percentiles: 10th={percentile_10:.4f}, 90th={percentile_90:.4f}"
+        )
 
         return percentile_10, percentile_90
 
@@ -569,10 +638,14 @@ class VariabilityFeatures:
         mm_cusum : float
             Max - min of cumulative sum.
         """
+        self.logger.debug("Calculating CUSUM (cumulative sum)")
 
         c = np.cumsum(mag - self.weighted_mean) / len(mag) / self.weighted_std
+        cusum_value = np.max(c) - np.min(c)
 
-        return np.max(c) - np.min(c)
+        self.logger.debug(f"CUSUM calculated: {cusum_value:.4f}")
+
+        return cusum_value
 
     def get_features(self, for_train=True):
         """
@@ -589,6 +662,7 @@ class VariabilityFeatures:
         features : OrderedDict
             Features dictionary.
         """
+        self.logger.debug(f"Extracting features (for_train={for_train})")
 
         # Get all the names of features.
         all_vars = vars(self)
@@ -603,5 +677,7 @@ class VariabilityFeatures:
 
         # Sort by the keys (i.e. feature names).
         features = OrderedDict(sorted(features.items(), key=lambda t: t[0]))
+
+        self.logger.debug(f"Extracted {len(features)} features")
 
         return features
