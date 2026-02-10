@@ -205,6 +205,7 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
     logger.debug("fasper: performing FFT computations")
     # Take the Fast Fourier Transforms.
     if is_pyfftw:
+        logger.debug("fasper: using pyfftw")
         fft_wk1 = pyfftw.builders.ifft(
             wk1, planner_effort="FFTW_ESTIMATE", threads=n_threads
         )
@@ -214,6 +215,7 @@ def fasper(x, y, ofac, hifac, n_threads, MACC=4):
         )
         wk2 = fft_wk2() * len(wk2)
     else:
+        logger.debug("fasper: using numpy.fft")
         wk1 = fft.ifft(wk1) * len(wk1)
         wk2 = fft.ifft(wk2) * len(wk1)
 
