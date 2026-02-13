@@ -27,17 +27,18 @@ def apply_log10(x, min_x=None):
     Returns:
         log10(x)
     """
+    # Convert pandas/astropy-backed inputs to a plain float ndarray to avoid
+    # recursive __array_ufunc__ interactions during arithmetic.
+    x = np.asarray(x, dtype=float)
+
     if min_x is None:
-        min_x = np.min(x)
+        min_x = np.nanmin(x)
 
-    x -= min_x
+    min_x = float(min_x)
+    x = x - min_x
 
-    # original.
-    x = x.replace(0.0, 1e-10)
-
-    # new.
-    # x += 1.
-
+    # Guard log10 domain for exact zero or tiny negative values from precision.
+    x = np.where(x <= 0.0, 1e-10, x)
     x = np.log10(x)
 
     return x, min_x
