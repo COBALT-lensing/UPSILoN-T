@@ -201,10 +201,12 @@ class UPSILoNT:
         features_in["slope_per90"], _ = apply_log10(
             features_in["slope_per90"], self.min_values["min_slope_per90"]
         )
-        features_in = np.array(features_in)
+        features_in = np.asarray(features_in, dtype=float)
+        norm_median = np.asarray(self.norm_params[0], dtype=float)
+        norm_std = np.asarray(self.norm_params[1], dtype=float)
 
         # original.
-        features_norm = (features_in - self.norm_params[0]) / self.norm_params[1]
+        features_norm = (features_in - norm_median) / norm_std
 
         # new.
         # features_norm = features_in - self.norm_params[0]
@@ -497,8 +499,8 @@ class UPSILoNT:
             self.min_values, open(os.path.join(output_folder, "min_params.pkl"), "wb")
         )
 
-        features = np.array(features)
-        labels = np.array(labels)
+        features = np.asarray(features, dtype=float)
+        labels = np.asarray(labels)
 
         self.logger.debug(
             f"Features shape: {features.shape}, Labels shape: {labels.shape}"
@@ -1224,10 +1226,12 @@ class UPSILoNT:
         features_in["slope_per90"], _ = apply_log10(
             features_in["slope_per90"], self.min_values["min_slope_per90"]
         )
-        features_in = np.array(features_in)
+        features_in = np.asarray(features_in, dtype=float)
+        norm_median = np.asarray(self.norm_params[0], dtype=float)
+        norm_std = np.asarray(self.norm_params[1], dtype=float)
 
         # Normalize.
-        features_norm = (features_in - self.norm_params[0]) / self.norm_params[1]
+        features_norm = (features_in - norm_median) / norm_std
         column_names = features.columns.values.tolist()
 
         labels_encoded = self.label_encoder.transform(np.array(labels))
